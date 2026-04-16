@@ -61,6 +61,36 @@ Security-sensitive reports should not go in public issues. Follow the disclosure
 - Performance wins that do not hurt readability.
 - Better error messages, especially around passphrase mistakes.
 
+## Running the development version
+
+```bash
+git clone https://github.com/SanjaySparker27/retlang.git
+cd retlang
+pip install -e ".[dev]"
+python -m unittest discover tests
+retlang ui   # try the UI
+```
+
+Editable install plus the `[dev]` extra is the expected setup for contributors. The core stays stdlib-only (see the policy below) but the `[dev]` extra may pull in lint/test helpers — those are fine at dev time, not at runtime.
+
+## Testing philosophy
+
+Tests mirror the module layout under `src/retlang/` and run on stdlib `unittest`. There are four shapes we care about:
+
+- **Unit tests per module.** Every module in `src/retlang/` has a matching test file under `tests/` exercising its public surface. Aim for behavior coverage, not line coverage theater.
+- **Integration round-trips.** `tests/test_roundtrip.py` encrypts then decrypts across every alphabet, strength preset, and wordmap combination. If you add an alphabet, layer, or kwarg, extend this file.
+- **Tamper rejection.** `tests/test_tamper.py` flips one bit at each field in the envelope (magic, version, iterations, salt, alphabet id, ciphertext, hmac) and asserts that decrypt raises rather than returning plaintext. Any new envelope field must get a tamper case here.
+- **UI API smoke tests.** The UI endpoints each get a minimal happy-path plus one failure-path test. These are fast; keep them that way.
+
+All PRs must leave the full suite green. CI enforces this; local runs should match.
+
+## What kinds of changes are accepted
+
+- **New alphabets:** welcome. Requirements: 64 unique, non-overlapping symbols, unambiguous round-trip decode, renders on common terminals and in the browser UI. Add it to `alphabets.BUILTINS` with the next free integer id, extend `tests/layers/test_alphabet.py`, no envelope version bump needed.
+- **New layers:** welcome, but they must hide behind a `VERSION` byte bump and must not break decrypt of older envelopes. See `docs/ARCHITECTURE.md` §8.2 for the exact contract.
+- **New optional dependencies:** only via a new `[extras]` group in `pyproject.toml`, feature-detected at import time so the core stays importable on a bare stdlib install. See `docs/ARCHITECTURE.md` §15.
+- **Core runtime dependencies:** not accepted. The no-runtime-dep rule is load-bearing; it is what keeps the supply chain small and the audit surface tiny.
+
 ## License
 
 By submitting a contribution, you agree that your work will be released under the MIT license that covers the rest of the project. See [LICENSE](LICENSE).

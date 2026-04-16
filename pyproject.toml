@@ -4,15 +4,27 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "retlang"
-version = "0.1.0"
-description = "A two-way, tamper-evident secret-language encryption library using only the Python stdlib."
+version = "0.2.0"
+description = "Toy-grade secret-language encryption: 11 alphabets, 4 strength presets, shareable retlang:// URLs, local browser UI. MIT-licensed, Python stdlib-only core."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
-    { name = "retlang contributors" }
+    { name = "SanjaySparker27" }
 ]
-keywords = ["encryption", "cipher", "vigenere", "hmac", "retlang"]
+keywords = [
+    "encryption",
+    "cipher",
+    "vigenere",
+    "hmac",
+    "retlang",
+    "stdlib",
+    "diceware",
+    "qr",
+    "shareable",
+    "browser-ui",
+    "cli",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -26,9 +38,15 @@ classifiers = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+qr = ["qrcode[pil]>=7.4"]
+dev = ["ruff>=0.4", "mypy>=1.10", "build>=1.2"]
+all = ["retlang[qr]"]
+
 [project.urls]
 Homepage = "https://github.com/SanjaySparker27/retlang"
 Issues = "https://github.com/SanjaySparker27/retlang/issues"
+Changelog = "https://github.com/SanjaySparker27/retlang/blob/main/CHANGELOG.md"
 
 [project.scripts]
 retlang = "retlang.cli:main"
@@ -38,3 +56,18 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+retlang = ["static/*", "static/**/*", "wordlists/*.txt"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.mypy]
+python_version = "3.10"
+strict_optional = true
+ignore_missing_imports = true

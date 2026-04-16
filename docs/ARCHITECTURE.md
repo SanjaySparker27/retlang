@@ -709,3 +709,334 @@ tests/
 - Rule: any change to §2 (pipeline order), §4 (envelope layout), or §5
   (public signature) requires a MAJOR bump of `__version__`. Adding an
   alphabet is PATCH. Adding an optional kwarg with a default is MINOR.
+
+---
+
+## 12. Modules (v0.2.0 additions)
+
+These modules ship alongside the core cipher. None of them alter the
+envelope format or the cipher pipeline; they sit on top of the existing
+`encrypt()` / `decrypt()` entry points.
+
+### 12.1 `share.py`
+
+**Purpose:** Turn envelope bytes into a transport-friendly URL and back.
+
+**Public functions:**
+- `make_url(envelope: bytes) -> str` — encodes `envelope` with
+  `base64.urlsafe_b64encode`, strips `=` padding, and prefixes
+  `retlang://v1/`.
+- `parse_url(url: str) -> bytes` — inverse of `make_url`. Raises
+  `ValueError` if the scheme is wrong, the version segment is not `v1`,
+  or the base64 payload is malformed.
+- `is_retlang_url(s: str) -> bool` — cheap prefix check used by
+  `agent.py` to avoid parsing random clipboard contents.
+- `share(plaintext: str, passphrase: str, **kwargs) -> str` — thin wrapper:
+  calls `encrypt(plaintext, passphrase, **kwargs)`, extracts the raw
+  envelope bytes, and returns `make_url(envelope)`. `kwargs` match
+  `encrypt()` (alphabet, strength, iterations, wordmap).
+- `open_url(url: str, passphrase: str, *, wordmap: dict | None = None) -> str`
+  — inverse of `share`. Parses the URL, reconstructs the envelope, and
+  returns `decrypt(...)` output.
+
+**Does NOT:** touch the network, cache URLs, or log payloads.
+
+### 12.2 `phrase.py`
+
+**Purpose:** Diceware passphrase generator.
+
+**Public functions:**
+- `suggest_phrase(words: int = 6, separator: str = " ") -> str` —
+  picks `words` entries from the bundled wordlist using
+  `secrets.choice` and joins them with `separator`.
+
+**Wordlist:** `src/retlang/wordlists/eff_large.txt`, shipped with the
+package. Loaded once at import time and cached in module scope.
+The wordlist is EFF-style (public domain) and has ~7776 entries, giving
+~12.9 bits per word.
+
+**Does NOT:** use `random`, mutate the wordlist, or fall back to a
+smaller list if the file is missing (raises instead).
+
+### 12.3 `entropy.py`
+
+**Purpose:** Score a passphrase's strength.
+
+**Public functions:**
+- `score(phrase: str) -> dict`
+  Returns a dict with four keys:
+  - `bits: float` — estimated entropy in bits. Uses character-class
+    heuristics for short phrases and word-count heuristics for
+    space-separated diceware-style inputs.
+  - `score: int` — integer `0..4`.
+  - `verdict: str` — one of `"very-weak"`, `"weak"`, `"fair"`,
+    `"strong"`, `"very-strong"`.
+  - `notes: list[str]` — human-readable hints. Empty when score is 4.
+
+**Does NOT:** check remote breach corpora. All scoring is local.
+
+### 12.4 `qr.py`
+
+**Purpose:** Optional QR code rendering for `retlang://` URLs.
+
+**Public functions:**
+- `qr_ascii(url: str) -> str` — returns a terminal-renderable ASCII QR
+  code.
+- `qr_png(url: str) -> bytes` — returns PNG bytes.
+- `qr_available() -> bool` — returns `True` iff the optional `qrcode`
+  dependency is importable.
+
+**Optional dependency.** Requires `qrcode` (pure-Python). Installed via
+the `[qr]` extra in `pyproject.toml`. The rest of `retlang` never
+imports from `qr.py` unless the user explicitly calls one of its
+functions, so missing `qrcode` is not an import-time failure.
+
+**Does NOT:** raise at import time. `qr_ascii` and `qr_png` raise
+`RuntimeError` with a clear "install retlang[qr]" message if called
+without the extra.
+
+### 12.5 `agent.py`
+
+**Purpose:** Cross-platform clipboard watcher that auto-decrypts
+`retlang://` links.
+
+**Public functions:**
+- `read_clipboard() -> str | None` — subprocess out to the platform
+  clipboard tool:
+  - macOS: `pbpaste`
+  - Linux (Wayland): `wl-paste`
+  - Linux (X11): `xclip -selection clipboard -o`
+  - Windows: `powershell -Command Get-Clipboard`
+  Returns `None` if no tool is available or if the clipboard is empty.
+- `watch(callback, *, interval: float = 1.0, once: bool = False) -> None`
+  Polls `read_clipboard` every `interval` seconds and calls `callback`
+  with the contents when they change and start with `retlang://`. If
+  `once` is `True`, checks once and returns.
+- `agent_cli(argv: list[str]) -> int` — CLI entry wired into
+  `retlang agent`.
+
+**Privacy:** the watcher only reads the clipboard; it never writes. It
+discards non-`retlang://` contents immediately and never logs.
+
+**Does NOT:** install itself as a background service, use OS-level
+clipboard APIs (keeps the module stdlib-only by delegating to
+subprocess).
+
+### 12.6 `ui.py`
+
+**Purpose:** Local browser UI served from the same Python process.
+
+**Public functions:**
+- `class RetlangHandler(http.server.BaseHTTPRequestHandler)` — routes
+  GET requests to static assets and POST requests to the JSON API.
+- `launch(port: int = 8765, open_browser: bool = True) -> None` —
+  binds to `127.0.0.1:<port>`, serves static assets from
+  `src/retlang/static/`, and (by default) opens the default browser
+  via `webbrowser.open`. Blocks until Ctrl-C.
+
+**Static assets.** Resolved via
+`importlib.resources.files("retlang").joinpath("static")` so it works
+both in editable installs and in installed wheels.
+
+**Binding.** Strictly `127.0.0.1`. There is no CLI flag to listen on
+`0.0.0.0` — if you want remote access, you are expected to tunnel (SSH,
+WireGuard) rather than bind publicly.
+
+**Does NOT:** use Flask, Starlette, or any web framework. Pure
+`http.server` plus `json` plus the existing `encrypt` / `decrypt` /
+`share` entry points.
+
+---
+
+## 13. `retlang://` URL format
+
+```
+retlang://v1/<base64url-of-envelope-bytes>
+```
+
+The `<base64url-of-envelope-bytes>` segment is the same bytes written by
+`encrypt()` before any text alphabet encoding is applied — i.e. the raw
+binary envelope defined in §4 (`MAGIC || VERSION || ITERATIONS || SALT ||
+ALPHABET_ID || CIPHERTEXT || HMAC`). The bytes are then encoded with
+`base64.urlsafe_b64encode` and stripped of `=` padding to keep the URL
+compact.
+
+Why a separate wrapper instead of the normal alphabet-encoded output?
+Because the inner alphabet (e.g. `emoji-food`) might contain characters
+that are legal in the envelope but inconvenient in a URL (multi-byte
+emoji, reserved punctuation). Wrapping as url-safe base64 makes any
+envelope safe to paste into a URL bar, a chat message, or a QR code,
+regardless of which inner alphabet the user picked.
+
+The version segment (`v1`) is independent of the envelope `VERSION`
+byte. `v1` refers to the URL *wrapping*; the envelope version lives
+inside the wrapped bytes.
+
+**Round trip:**
+
+```python
+from retlang.share import make_url, parse_url
+
+url = make_url(envelope_bytes)          # retlang://v1/...
+assert parse_url(url) == envelope_bytes
+```
+
+---
+
+## 14. Web UI API
+
+The UI is a single-page app served from `GET /`. All state changes flow
+through JSON POST endpoints. All endpoints return `application/json`.
+Errors return HTTP 4xx with `{"error": "<message>"}`.
+
+| Method | Path                  | Purpose                                        |
+|--------|-----------------------|------------------------------------------------|
+| GET    | `/`                   | Serve the UI HTML shell.                       |
+| GET    | `/static/<path>`      | Serve bundled static assets (CSS, JS, fonts).  |
+| GET    | `/api/alphabets`      | List every registered alphabet with a preview. |
+| POST   | `/api/encrypt`        | Encrypt plaintext.                             |
+| POST   | `/api/decrypt`        | Decrypt ciphertext.                            |
+| POST   | `/api/share`          | Encrypt and return a `retlang://` URL.         |
+| POST   | `/api/open`           | Decrypt a `retlang://` URL.                    |
+| POST   | `/api/suggest-phrase` | Return a diceware passphrase.                  |
+| POST   | `/api/strength-check` | Return an entropy scorecard.                   |
+| GET    | `/api/qr?url=...`     | Return PNG bytes for the URL (if `[qr]`).      |
+
+**`POST /api/encrypt`**
+
+Request:
+
+```json
+{
+  "plaintext": "meet at 8",
+  "passphrase": "hunter2 table cloud",
+  "alphabet": "emoji-food",
+  "strength": "normal"
+}
+```
+
+Response:
+
+```json
+{ "ciphertext": "🍕🍔🍣🍜..." }
+```
+
+**`POST /api/decrypt`**
+
+Request:
+
+```json
+{ "ciphertext": "🍕🍔🍣🍜...", "passphrase": "hunter2 table cloud" }
+```
+
+Response:
+
+```json
+{ "plaintext": "meet at 8" }
+```
+
+**`POST /api/share`**
+
+Request: same shape as `/api/encrypt`.
+
+Response:
+
+```json
+{ "url": "retlang://v1/U0xORwIA..." }
+```
+
+**`POST /api/open`**
+
+Request:
+
+```json
+{ "url": "retlang://v1/U0xORwIA...", "passphrase": "hunter2 table cloud" }
+```
+
+Response:
+
+```json
+{ "plaintext": "meet at 8" }
+```
+
+**`POST /api/suggest-phrase`**
+
+Request:
+
+```json
+{ "words": 6, "separator": " " }
+```
+
+Response:
+
+```json
+{ "phrase": "otter violet quiet river anchor moss" }
+```
+
+**`POST /api/strength-check`**
+
+Request:
+
+```json
+{ "phrase": "hunter2" }
+```
+
+Response:
+
+```json
+{
+  "bits": 22.4,
+  "score": 1,
+  "verdict": "weak",
+  "notes": ["short", "appears in common-password corpora"]
+}
+```
+
+**`GET /api/qr`**
+
+Query string: `url=<retlang://...>`. Returns `image/png` bytes. Returns
+`501 Not Implemented` if the `[qr]` extra is not installed, with a JSON
+body explaining how to install it.
+
+---
+
+## 15. Extending with optional deps
+
+`retlang`'s core stays stdlib-only. Optional features live behind
+extras in `pyproject.toml` and are feature-detected at import time.
+
+**Adding a new extra.** In `pyproject.toml`:
+
+```toml
+[project.optional-dependencies]
+qr = ["qrcode>=7"]
+all = ["qrcode>=7"]       # roll up every optional dep
+```
+
+**Feature-detect at import time.** Do not import the optional package
+at module load. Instead, import lazily inside the function that needs
+it, and raise a `RuntimeError` with an install hint if it fails:
+
+```python
+# qr.py
+def qr_available() -> bool:
+    try:
+        import qrcode  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+def qr_png(url: str) -> bytes:
+    try:
+        import qrcode
+    except ImportError as e:
+        raise RuntimeError(
+            "QR support not installed. Run: pip install retlang[qr]"
+        ) from e
+    ...
+```
+
+**Core rule.** Nothing in `src/retlang/__init__.py`, `cipher.py`,
+`keyderivation.py`, `header.py`, `integrity.py`, `alphabets.py`, or
+`layers/*` may import an optional dependency — not even lazily. Those
+modules must continue to work on a bare stdlib install.

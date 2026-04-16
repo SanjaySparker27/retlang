@@ -352,3 +352,173 @@ retlang decrypt \
 | 3    | Unknown alphabet or malformed ciphertext      |
 
 Exit codes are stable across minor versions; please rely on them in scripts.
+
+---
+
+## v0.2.0 additions
+
+Everything below this line was added in 0.2.0. It builds on the same cipher primitives described above; none of it changes how `encrypt` or `decrypt` work.
+
+### Command table (complete)
+
+| Command                  | Purpose                                                                   |
+|--------------------------|---------------------------------------------------------------------------|
+| `retlang encrypt`        | Encrypt plaintext; writes ciphertext in the chosen alphabet.              |
+| `retlang decrypt`        | Decrypt ciphertext; alphabet and iterations are read from the envelope.  |
+| `retlang share`          | Encrypt and wrap the result as a `retlang://v1/...` URL.                 |
+| `retlang open`           | Open a `retlang://` URL and print the plaintext.                         |
+| `retlang ui`             | Launch the local browser UI on `127.0.0.1`.                              |
+| `retlang agent`          | Watch the clipboard and auto-decrypt `retlang://` links.                 |
+| `retlang suggest-phrase` | Generate a diceware passphrase from the EFF-style wordlist.              |
+| `retlang strength-check` | Score a passphrase and return `{bits, score, verdict, notes}`.           |
+| `retlang genkey`         | Emit a random passphrase (alnum, hex, or words).                         |
+| `retlang list-alphabets` | List every registered output alphabet.                                   |
+
+### Browser UI
+
+`retlang ui` starts a local web app so you can encrypt, decrypt, and share without using the terminal.
+
+```bash
+retlang ui
+# Serving retlang UI at http://127.0.0.1:8765
+```
+
+**Arguments**
+
+| Flag            | Default     | Description                                                                   |
+|-----------------|-------------|-------------------------------------------------------------------------------|
+| `--port INT`    | `8765`      | TCP port to bind.                                                             |
+| `--no-browser`  | off         | Do not auto-launch your default browser.                                      |
+
+**Security note.** The server binds to `127.0.0.1` only. It is not reachable from your LAN, a VPN peer, or any other host. If you want a remote friend to decrypt something, send them a `retlang://` link — do not try to expose the UI over the network.
+
+All crypto runs in-process; the UI is a thin HTTP wrapper over the same `encrypt()` / `decrypt()` entry points the CLI uses.
+
+### Shareable URLs
+
+A `retlang://v1/...` URL is just the binary envelope re-encoded as URL-safe base64 (no padding). The scheme is stable across alphabets; the alphabet used for styling is stored inside the envelope.
+
+```
+retlang://v1/<base64url-of-envelope-bytes>
+```
+
+**Encrypt and share:**
+
+```bash
+retlang share -p "hunter2 table cloud" "meet at 8"
+# retlang://v1/U0xORwIA...
+```
+
+**Arguments for `share`**
+
+| Flag                      | Required | Description                                                   |
+|---------------------------|----------|---------------------------------------------------------------|
+| `TEXT` (positional)       | yes*     | Plaintext to encrypt and wrap.                                |
+| `--infile PATH`           | yes*     | Read plaintext from a file instead of a positional arg.       |
+| `-p, --passphrase PHRASE` | yes      | Shared secret.                                                |
+| `-a, --alphabet NAME`     | no       | Alphabet used for the inner envelope. Default: `base64`.      |
+| `-s, --strength LEVEL`    | no       | PBKDF2 preset. Default: `normal`.                             |
+| `--iterations INT`        | no       | Custom iteration count. Mutually exclusive with `--strength`. |
+| `--qr`                    | no       | Also print a QR code for the URL. Requires `retlang[qr]`.     |
+
+\* Exactly one of `TEXT` or `--infile` is required.
+
+**Receive and open:**
+
+```bash
+retlang open "retlang://v1/U0xORwIA..."
+# (prompts for passphrase)
+# meet at 8
+```
+
+**Arguments for `open`**
+
+| Flag                      | Required | Description                                           |
+|---------------------------|----------|-------------------------------------------------------|
+| `URL` (positional)        | yes      | A `retlang://v1/...` URL.                             |
+| `-p, --passphrase PHRASE` | no       | Passphrase. If omitted, `open` prompts via `getpass`. |
+
+**Full round trip:**
+
+```bash
+$ URL=$(retlang share -p "hunter2 table cloud" "meet at 8")
+$ echo "$URL"
+retlang://v1/U0xORwIAAAPoM...
+
+$ retlang open -p "hunter2 table cloud" "$URL"
+meet at 8
+```
+
+### Clipboard agent
+
+`retlang agent` watches your clipboard for `retlang://` links and decrypts them in place as they appear.
+
+```bash
+retlang agent
+# watching clipboard; press Ctrl-C to stop
+```
+
+**Arguments**
+
+| Flag                      | Default | Description                                                                   |
+|---------------------------|---------|-------------------------------------------------------------------------------|
+| `--once`                  | off     | Check the clipboard once and exit.                                            |
+| `-p, --passphrase PHRASE` | prompt  | Passphrase. If omitted, `agent` prompts the first time it sees a link.        |
+| `--interval SECONDS`      | `1.0`   | Polling interval.                                                             |
+
+**What it watches.** Only strings starting with `retlang://`. Everything else is ignored; regular clipboard contents are never read back or stored.
+
+**How to exit.** `Ctrl-C`.
+
+**Privacy notes.** The agent polls the clipboard via subprocess (`pbpaste` on macOS, `xclip` / `wl-paste` on Linux, `Get-Clipboard` on Windows). It never sends anything over the network. It does not log ciphertext or plaintext. If you kill the process, nothing persists.
+
+### Passphrase suggestions
+
+`retlang suggest-phrase` prints a diceware-style passphrase drawn from the bundled EFF-style wordlist.
+
+```bash
+retlang suggest-phrase
+# otter violet quiet river anchor moss
+```
+
+**Arguments**
+
+| Flag             | Default | Description                                               |
+|------------------|---------|-----------------------------------------------------------|
+| `--words N`      | `6`     | Number of words.                                          |
+| `--separator C`  | space   | Character between words.                                  |
+
+Six EFF-style words give roughly 77 bits of entropy. Raise `--words` if your threat model demands it.
+
+### Strength check
+
+`retlang strength-check` scores a passphrase and prints a verdict.
+
+```bash
+$ retlang strength-check "hunter2"
+{
+  "bits": 22.4,
+  "score": 1,
+  "verdict": "weak",
+  "notes": ["short", "appears in common-password corpora"]
+}
+
+$ retlang strength-check "otter violet quiet river anchor moss"
+{
+  "bits": 77.5,
+  "score": 4,
+  "verdict": "strong",
+  "notes": ["diceware-style passphrase", "length >= 30"]
+}
+```
+
+The score field is integer `0..4`; `verdict` is one of `very-weak`, `weak`, `fair`, `strong`, `very-strong`. `notes` is a list of human-readable hints — empty when the score is already very-strong.
+
+**Arguments**
+
+| Flag                      | Default | Description                                               |
+|---------------------------|---------|-----------------------------------------------------------|
+| `PHRASE` (positional)     | yes*    | Passphrase to score. Quote it to preserve spaces.         |
+| `--stdin`                 | no      | Read the phrase from stdin instead of an argument.        |
+
+\* Exactly one of the positional `PHRASE` or `--stdin` must be supplied.

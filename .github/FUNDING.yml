@@ -1,0 +1,21 @@
+# Sponsor button configuration.
+#
+# All entries are commented out on purpose so that GitHub does NOT surface a
+# "Sponsor" button until the repository owner explicitly enables one. To turn
+# on sponsorship, uncomment the relevant line(s) below and commit.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+# github: [SanjaySparker27]
+# patreon: # username
+# open_collective: # username
+# ko_fi: # username
+# tidelift: # pypi/<package-name>
+# community_bridge: # project name
+# liberapay: # username
+# issuehunt: # username
+# lfx_crowdfunding: # project name
+# polar: # username
+# buy_me_a_coffee: # username
+# thanks_dev: # username
+# custom: # ["https://example.com/donate"]

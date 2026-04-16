@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build sdist and wheel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Upload dist/ artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI (OIDC trusted publisher)
+    needs: build
+    runs-on: ubuntu-latest
+    # The `pypi` GitHub environment is required so the repo owner can scope
+    # the OIDC trusted publisher to exactly this job. See:
+    # https://docs.pypi.org/trusted-publishers/
+    # Owner must register the publisher on PyPI with:
+    #   Owner:        SanjaySparker27
+    #   Repository:   retlang
+    #   Workflow:     release.yml
+    #   Environment:  pypi
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download dist/ artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No password/token: authenticated via OIDC trusted publisher.
+
+  github-release:
+    name: Create GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download dist/ artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.whl
+            dist/*.tar.gz

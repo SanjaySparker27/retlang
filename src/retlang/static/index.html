@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <title>retlang</title>
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a0a0f'/><path d='M10 11v10M10 11h6a3 3 0 010 6h-6m6 0l4 4' stroke='%23a78bfa' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <div class="container header-row">
+      <a class="brand" href="#" aria-label="retlang home">
+        <svg class="brand-glyph" viewBox="0 0 32 32" aria-hidden="true">
+          <defs>
+            <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#a78bfa" />
+              <stop offset="1" stop-color="#22d3ee" />
+            </linearGradient>
+          </defs>
+          <rect x="1" y="1" width="30" height="30" rx="8" fill="none" stroke="url(#bg)" stroke-width="1.5" />
+          <path d="M10 11v10M10 11h6a3 3 0 010 6h-6m6 0l4 4" stroke="url(#bg)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+        </svg>
+        <span class="brand-name">retlang</span>
+        <span class="version-pill">v0.2.0</span>
+      </a>
+      <nav class="header-links">
+        <a class="link-muted" href="https://github.com/SanjaySparker27/retlang" target="_blank" rel="noopener noreferrer">GitHub &rarr;</a>
+      </nav>
+    </div>
+    <p class="local-note" role="note">
+      <span class="lock-dot" aria-hidden="true"></span>
+      Runs locally &mdash; nothing leaves your machine.
+    </p>
+  </header>
+
+  <main class="container">
+
+    <section class="mode-tabs" role="tablist" aria-label="Mode">
+      <button class="tab" role="tab" data-mode="encrypt" aria-selected="true" aria-controls="panel">Encrypt</button>
+      <button class="tab" role="tab" data-mode="decrypt" aria-selected="false" aria-controls="panel">Decrypt</button>
+      <button class="tab" role="tab" data-mode="share" aria-selected="false" aria-controls="panel">Share</button>
+      <button class="tab" role="tab" data-mode="open" aria-selected="false" aria-controls="panel">Open</button>
+      <span class="tab-indicator" aria-hidden="true"></span>
+    </section>
+
+    <section id="panel" class="panel" role="tabpanel" aria-live="polite">
+      <div class="grid">
+        <div class="col col-input">
+
+          <div class="field">
+            <label for="input-text" id="input-label">Plaintext</label>
+            <div class="dropzone" id="dropzone">
+              <textarea
+                id="input-text"
+                rows="10"
+                spellcheck="false"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                placeholder="Type or paste text here, or drop a .txt file."
+              ></textarea>
+              <div class="drop-hint" aria-hidden="true">Drop a .txt file</div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="passphrase">Passphrase</label>
+            <div class="pass-row">
+              <input
+                id="passphrase"
+                type="password"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="Enter a passphrase"
+              />
+              <button type="button" class="icon-btn" id="toggle-pass" aria-label="Show passphrase" aria-pressed="false">
+                <svg class="eye-show" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                <svg class="eye-hide" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 6.1A10.9 10.9 0 0112 6c6.4 0 10 7 10 7a17.8 17.8 0 01-3.4 4M6.3 7.6A17 17 0 002 13s3.6 7 10 7c1.7 0 3.2-.4 4.5-1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <div class="meter">
+              <div class="meter-bar" id="meter-bar"></div>
+            </div>
+            <div class="meter-row">
+              <span class="meter-verdict" id="meter-verdict">—</span>
+              <span class="meter-bits" id="meter-bits">0 bits</span>
+            </div>
+            <button type="button" class="link-btn" id="suggest-btn">&#x2728; Suggest a strong phrase</button>
+          </div>
+
+          <div class="field">
+            <label>Alphabet</label>
+            <div class="seg" id="alphabet-seg" role="radiogroup" aria-label="Alphabet"></div>
+            <div class="alphabet-preview" id="alphabet-preview">&mdash;</div>
+          </div>
+
+          <div class="field">
+            <label for="strength">Strength</label>
+            <input type="range" min="0" max="3" step="1" value="1" id="strength" list="strength-stops" />
+            <datalist id="strength-stops">
+              <option value="0" label="Fast"></option>
+              <option value="1" label="Normal"></option>
+              <option value="2" label="Strong"></option>
+              <option value="3" label="Paranoid"></option>
+            </datalist>
+            <div class="strength-labels" aria-hidden="true">
+              <span>Fast</span><span>Normal</span><span>Strong</span><span>Paranoid</span>
+            </div>
+            <div class="caption" id="strength-caption">Normal &middot; ~200k iterations &middot; ~60 ms</div>
+          </div>
+
+          <details class="field advanced">
+            <summary>Advanced: use a wordmap</summary>
+            <label for="wordmap" class="sr-only">Wordmap JSON</label>
+            <textarea
+              id="wordmap"
+              rows="4"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder='{"word": "mapping", "...": "..."}'
+            ></textarea>
+            <div class="caption" id="wordmap-caption">Empty &mdash; default wordmap will be used.</div>
+          </details>
+
+          <button type="button" class="btn btn-primary" id="action-btn">
+            <span class="btn-label">Encrypt &rarr;</span>
+            <span class="spinner" aria-hidden="true"></span>
+          </button>
+        </div>
+
+        <div class="col col-output">
+          <div class="field">
+            <div class="output-head">
+              <label id="output-label" for="output-text">Ciphertext</label>
+              <button type="button" class="ghost-btn" id="copy-btn" aria-live="polite">Copy</button>
+            </div>
+            <div class="output-wrap">
+              <div id="output-text" class="output" aria-live="polite" aria-atomic="false"></div>
+              <canvas id="qr-canvas" class="qr" aria-label="QR code" hidden></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-row">
+      <span>retlang v0.2.0 &middot; MIT &middot; running locally on 127.0.0.1</span>
+      <a class="link-muted" href="https://github.com/SanjaySparker27/retlang/blob/main/docs/USAGE.md" target="_blank" rel="noopener noreferrer">Docs</a>
+    </div>
+  </footer>
+
+  <div class="toast-region" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

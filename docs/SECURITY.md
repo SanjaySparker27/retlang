@@ -1,5 +1,7 @@
 # Security Policy and Threat Model
 
+> **Scope note.** This file is the project's *threat model* and honest caveats document. For the vulnerability disclosure policy (how to report a bug privately, response SLAs, coordinated-disclosure timelines), see the top-level [`SECURITY.md`](../SECURITY.md) instead. Both files exist on purpose: this one tells you what `retlang` can and cannot defend against; the top-level one tells you what to do when you think you've found a flaw.
+
 `retlang` is a toy cipher. This document is an honest description of what it can and cannot do, so you can decide whether it is appropriate for your use case.
 
 ## TL;DR
@@ -87,3 +89,12 @@ This does not mean there are none to find. It means nobody has found any yet. Gi
 ## Supported versions
 
 Only the latest `main` branch and the most recent tagged release receive security fixes. Older tags are frozen in time. If you are running an older version, upgrade before reporting issues.
+
+## v0.2.0 additional caveats
+
+Version 0.2.0 adds a local browser UI, shareable URLs, and a clipboard watcher. None of these change the underlying threat model, but they do introduce a few surfaces worth calling out explicitly.
+
+- **Local browser UI (`retlang ui`) binds to `127.0.0.1` only.** It is not reachable from your LAN, from a VPN peer, or from any other host. There is no CLI flag to listen on `0.0.0.0`. Even so, the UI trusts whoever can reach `127.0.0.1` on your machine — that means any local user, any local process, and any locally compromised browser extension. You are responsible for ensuring the machine itself is trusted; `retlang` cannot help with that.
+- **`retlang://` URLs are ciphertext, not plaintext — but they are still interceptable.** If you send a `retlang://` link over an insecure channel (unencrypted email, a group chat you don't trust, a social media DM), the ciphertext is exposed to anyone watching that channel. The HMAC tag will detect tampering, but it cannot detect interception. An attacker who captures the URL can then brute-force the passphrase offline, limited by your chosen PBKDF2 iteration count. Use a strong passphrase and a trusted transport.
+- **Clipboard watcher (`retlang agent`) reads the system clipboard via subprocess.** It only acts on strings starting with `retlang://` and never logs or transmits anything, but the clipboard itself is a shared OS resource: other processes on the same machine can read it too. If you paste a plaintext into your clipboard to encrypt it, that plaintext is briefly visible to any process with clipboard access until you copy something else.
+- **QR codes are just URLs in image form.** A QR code of a `retlang://` link has the same security properties as the URL: anyone who can photograph the code can attempt offline brute-force. Do not paste QR codes into public screenshares.
