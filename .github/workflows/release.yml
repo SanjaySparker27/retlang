@@ -1,9 +1,18 @@
 name: Release
 
+# Manual-only until PyPI trusted publisher is registered on pypi.org.
+# Setup: https://docs.pypi.org/trusted-publishers/
+#   Owner: SanjaySparker27, Repo: retlang, Workflow: release.yml, Environment: pypi
+# Once registered, re-enable tag trigger by uncommenting the `push.tags` block below.
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag to release (e.g. v0.2.0)"
+        required: true
+  # push:
+  #   tags:
+  #     - "v*"
 
 permissions:
   contents: read
